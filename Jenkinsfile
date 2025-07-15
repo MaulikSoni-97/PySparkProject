@@ -4,37 +4,69 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-               sh 'pipenv --python python3 sync'
+                powershell '''
+                    Write-Host "=== Running Pipenv Sync ==="
+                    pipenv --python python.exe sync
+                '''
             }
         }
+
         stage('Test') {
             steps {
-               sh 'pipenv run pytest'
+                powershell '''
+                    Write-Host "=== Running Tests with Pytest ==="
+                    pipenv run pytest
+                '''
             }
         }
+
         stage('Package') {
-	    when{
-		    anyOf{ branch "master" ; branch 'release' }
-	    }
+            when {
+                anyOf { branch "master"; branch "release" }
+            }
             steps {
-               sh 'zip -r sbdl.zip lib'
+                powershell '''
+                    Write-Host "=== Packaging Files into sbdl.zip ==="
+                    if (Test-Path "PySparkProject.zip") { Remove-Item "PySparkProject.zip" -Force }
+                    Compress-Archive -Path lib -DestinationPath "C:\\Users\\Dell\\PycharmProjects".zip -Force
+                '''
             }
         }
-	stage('Release') {
-	   when{
-	      branch 'release'
-	   }
-           steps {
-              sh "scp -i /home/prashant/cred/edge-node_key.pem -o 'StrictHostKeyChecking no' -r sbdl.zip log4j.properties sbdl_main.py sbdl_submit.sh conf prashant@40.117.123.105:/home/prashant/sbdl-qa"
-           }
+
+        stage('Release') {
+            when {
+                branch "release"
+            }
+            steps {
+                powershell '''
+                    Write-Host "=== Releasing to QA Folder ==="
+
+                    $qaFolder = "C:\\Users\\Dell\\PycharmProjects\\QA_Deployment"
+                    if (!(Test-Path $qaFolder)) {
+                        New-Item -ItemType Directory -Path $qaFolder | Out-Null
+                    }
+
+                    Copy-Item "C:\\Users\\Dell\\PycharmProjects\\sbdl.zip", log4j.properties, sbdl_main.py, sbdl_submit.sh, conf -Destination $qaFolder -Recurse -Force
+                '''
+            }
         }
-	stage('Deploy') {
-	   when{
-	      branch 'master'
-	   }
-           steps {
-               sh "scp -i /home/prashant/cred/edge-node_key.pem -o 'StrictHostKeyChecking no' -r sbdl.zip log4j.properties sbdl_main.py sbdl_submit.sh conf prashant@40.117.123.105:/home/prashant/sbdl-prod"
-           }
+
+        stage('Deploy') {
+            when {
+                branch "master"
+            }
+            steps {
+                powershell '''
+                    Write-Host "=== Deploying to Production Folder (Local Simulation) ==="
+
+                    $prodFolder = "C:\\Users\\Dell\\PycharmProjects\\Prod_Deployment"
+                    if (!(Test-Path $prodFolder)) {
+                        New-Item -ItemType Directory -Path $prodFolder | Out-Null
+                    }
+
+                    Copy-Item "C:\\Users\\Dell\\PycharmProjects\\sbdl.zip", log4j.properties, sbdl_main.py, sbdl_submit.sh, conf -Destination $prodFolder -Recurse -Force
+                '''
+            }
         }
     }
 }
